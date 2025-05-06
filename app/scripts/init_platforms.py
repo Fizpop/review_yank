@@ -20,12 +20,12 @@ def init_platforms():
             # Add Rozetka platform
             rozetka = Platform.query.filter_by(domain='rozetka.com.ua').first()
             if not rozetka:
-                rozetka = Platform(
-                    name='Rozetka',
-                    domain='rozetka.com.ua',
+            rozetka = Platform(
+                name='Rozetka',
+                domain='rozetka.com.ua',
                     description='Інтернет-магазин Rozetka'
-                )
-                db.session.add(rozetka)
+            )
+            db.session.add(rozetka)
             
             db.session.commit()
             print("Платформи успішно додані")

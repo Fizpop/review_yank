@@ -126,4 +126,82 @@ function showError(message) {
         errorDiv.classList.remove('show');
         setTimeout(() => errorDiv.remove(), 150);
     }, 5000);
-} 
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('extractForm');
+    if (!form) return; // Код виконується лише на дашборді
+
+    const urlInput = document.getElementById('url');
+    const submitBtn = document.getElementById('extractBtn');
+    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        loadingModal.show();
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обробка...';
+
+        let redirected = false;
+
+        try {
+            const response = await fetch('/review/extract', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: urlInput.value
+                })
+            });
+
+            if (response.status === 401) {
+                redirected = true;
+                loadingModal.hide();
+                window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                redirected = true;
+                loadingModal.hide();
+                window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data && data.error && data.error === 'login_required') {
+                redirected = true;
+                loadingModal.hide();
+                window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Помилка при витягуванні відгуків');
+            }
+
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            if (data.extraction_id) {
+                window.location.href = '/review/extraction/' + data.extraction_id;
+            } else {
+                throw new Error('Не вдалося отримати ID витягу');
+            }
+
+        } catch (error) {
+            loadingModal.hide();
+            if (!redirected) {
+                alert(error.message || 'Помилка при витягуванні відгуків');
+            }
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-download"></i> Витягти відгуки';
+        }
+    });
+}); 

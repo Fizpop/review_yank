@@ -203,10 +203,8 @@ class ReviewExtractor:
                 current_app.logger.info(f"Знайдено контейнер відгуків. HTML: {reviews_container.prettify()[:500]}...")
             else:
                 current_app.logger.warning(f"Не знайдено контейнер відгуків з селектором '{container_selector}'")
-            
             review_items = soup.select(f"{container_selector} {item_selector}")
             current_app.logger.info(f"Знайдено відгуків: {len(review_items)}")
-            
             if len(review_items) == 0:
                 current_app.logger.warning(f"Не знайдено відгуків за селектором '{container_selector} {item_selector}'")
                 # Перевіряємо наявність елементів окремо
@@ -218,7 +216,6 @@ class ReviewExtractor:
                 if len(all_items) > 0:
                     review_items = all_items
                     current_app.logger.info(f"Використовуємо всі знайдені елементи відгуків на сторінці: {len(review_items)}")
-            
             for item in review_items:
                 try:
                     review = {
@@ -226,7 +223,6 @@ class ReviewExtractor:
                         'advantages': None,
                         'disadvantages': None
                     }
-                    
                     # Витягуємо всі поля згідно конфігурації
                     for field_name, selector_config in fields_config.items():
                         if isinstance(selector_config, dict):
@@ -299,21 +295,17 @@ class ReviewExtractor:
                         else:
                             current_app.logger.warning(f"Не знайдено елемент з селектором '{selector}' для поля '{field_name}'")
                             review[field_name] = None
-                    
                     if review.get('author') or review.get('title'):
                         reviews.append(review)
                         current_app.logger.debug(f"Оброблено відгук: {json.dumps(review, ensure_ascii=False)}")
-                    
                 except Exception as e:
                     current_app.logger.error(f"Помилка при обробці відгуку: {str(e)}")
                     continue
-            
             return {
                 'product_title': product_title,
                 'reviews': reviews,
                 'platform': domain
             }
-            
         except Exception as e:
             current_app.logger.error(f"Помилка при витягуванні відгуків: {str(e)}")
             raise
