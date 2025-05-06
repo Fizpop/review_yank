@@ -1,0 +1,50 @@
+{
+    "selectors": {
+        "pagination": {
+            "next_page": "[data-qaid='pagination_next']",
+            "page_param": "page"
+        },
+        "product_title": [
+            "[data-qaid='product_name']",
+            "[data-qaid='page_title']"
+        ],
+        "review_fields": {
+            "author": {
+                "selector": "[data-qaid='opinion_item'] [data-qaid='author_name']",
+                "type": "text"
+            },
+            "date": {
+                "selector": "[data-qaid='opinion_item'] [data-qaid='date_created']",
+                "type": "text"
+            },
+            "rating": {
+                "selector": "[data-qaid='opinion_item'] [data-qaid='count_stars']",
+                "attribute": "data-qaid-raiting",
+                "type": "number",
+                "converter": "divide_by_20"
+            },
+            "text": {
+                "selector": "[data-qaid='opinion_item'] [data-qaid='title']",
+                "type": "text"
+            },
+            "title": {
+                "selector": "[data-qaid='opinion_item'] [data-qaid='title']",
+                "type": "text"
+            }
+        },
+        "review_item": "[data-qaid='opinion_item']",
+        "reviews_container": "[data-qaid='opinion_list']"
+    },
+    "base_url": "https://prom.ua",
+    "url_patterns": {
+        "reviews": "/ua/product-opinions/list/{product_id}",
+        "product": "/ua/p{product_id}"
+    },
+    "headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Connection": "keep-alive",
+        "Cache-Control": "max-age=0"
+    }
+} 

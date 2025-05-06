@@ -1,0 +1,48 @@
+{
+  "parser": {
+    "type": "html",
+    "config": {
+      "parser": "lxml"
+    }
+  },
+  "domains": ["rozetka.com.ua", "bt.rozetka.com.ua"],
+  "selectors": {
+    "product": {
+      "title": {
+        "selector": "h1.product__title",
+        "type": "text"
+      }
+    },
+    "reviews": {
+      "container": "div.product-comments",
+      "item": "div.comment__inner",
+      "fields": {
+        "author": {
+          "selector": "div[data-testid='replay-header-author']",
+          "type": "text"
+        },
+        "date": {
+          "selector": "time[data-testid='replay-header-date']",
+          "type": "text"
+        },
+        "rating": {
+          "selector": "div[data-testid='stars-rating']",
+          "type": "number",
+          "attribute": "data-rating"
+        },
+        "text": {
+          "selector": "div.comment__body",
+          "type": "text"
+        },
+        "advantages": {
+          "selector": "div.comment__advantages",
+          "type": "text"
+        },
+        "disadvantages": {
+          "selector": "div.comment__disadvantages",
+          "type": "text"
+        }
+      }
+    }
+  }
+}

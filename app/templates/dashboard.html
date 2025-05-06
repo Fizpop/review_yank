@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Панель керування - AI Review Extractor{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>Вітаємо, {{ current_user.username }}!</h2>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Ліміти використання</h5>
+                    <p class="card-text">
+                        {% set start_of_month = current_user.created_at.replace(day=1) %}
+                        {% set used = current_user.extractions.filter(Extraction.created_at >= start_of_month).all()|length %}
+                        {% set total = current_user.get_remaining_urls() %}
+                        <strong>Використано URL:</strong> {{ used }}/{{ total }}
+                    </p>
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" 
+                             style="width: {{ (used / total * 100)|round }}%"
+                             aria-valuenow="{{ used }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="{{ total }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Статус акаунту</h5>
+                    <p class="card-text">
+                        <strong>Тип:</strong> 
+                        {% if current_user.is_premium %}
+                        <span class="badge bg-success">Преміум</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Базовий</span>
+                        {% endif %}
+                    </p>
+                    {% if current_user.is_premium and current_user.subscription_end %}
+                    <p class="card-text">
+                        <strong>Дійсний до:</strong> {{ current_user.subscription_end.strftime('%Y-%m-%d') }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Швидкі дії</h5>
+                    <a href="{{ url_for('main.index') }}" class="btn btn-primary mb-2 w-100">
+                        Новий витяг
+                    </a>
+                    <a href="{{ url_for('review.list_extractions') }}" class="btn btn-outline-primary w-100">
+                        Мої витяги
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Останні витяги</h5>
+                    {% set recent_extractions = current_user.extractions.order_by(Extraction.created_at.desc()).limit(5).all() %}
+                    {% if recent_extractions %}
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>Платформа</th>
+                                    <th>Статус</th>
+                                    <th>Дата</th>
+                                    <th>Дії</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for extraction in recent_extractions %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ extraction.url }}" target="_blank" class="text-truncate d-inline-block" style="max-width: 200px;">
+                                            {{ extraction.url }}
+                                        </a>
+                                    </td>
+                                    <td>{{ extraction.platform }}</td>
+                                    <td>
+                                        {% if extraction.status == 'completed' %}
+                                        <span class="badge bg-success">Завершено</span>
+                                        {% elif extraction.status == 'pending' %}
+                                        <span class="badge bg-warning">В обробці</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Помилка</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ extraction.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        <a href="{{ url_for('review.view_extraction', id=extraction.id) }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            Переглянути
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center py-3">У вас поки немає витягів. 
+                        <a href="{{ url_for('main.index') }}">Створіть перший витяг</a>
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if not current_user.is_premium %}
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h5 class="card-title">Покращіть свій досвід з Преміум</h5>
+                    <p class="card-text">
+                        Отримайте доступ до розширених можливостей:
+                    </p>
+                    <ul>
+                        <li>До 100 URL на місяць</li>
+                        <li>До 100 відгуків з кожного URL</li>
+                        <li>Пріоритетна підтримка</li>
+                        <li>Розширена аналітика</li>
+                    </ul>
+                    <a href="#" class="btn btn-success">Активувати Преміум</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

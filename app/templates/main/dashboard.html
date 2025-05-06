@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Витягти відгуки</h5>
+                    <form id="extractForm">
+                        <div class="mb-3">
+                            <label for="url" class="form-label">URL сторінки з відгуками</label>
+                            <input type="url" class="form-control" id="url" name="url" required 
+                                   placeholder="Наприклад: https://rozetka.com.ua/product/comments/ або https://prom.ua/product">
+                            <div class="form-text">
+                                Підтримувані платформи:
+                                <span class="badge bg-success">Rozetka</span>
+                                <span class="badge bg-success">Prom.ua</span>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="extractBtn">
+                            <i class="fas fa-download"></i> Витягти відгуки
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Ліміти</h5>
+                    <p class="card-text">
+                        <small class="text-muted">Оновлюється щомісяця</small>
+                    </p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">URLs використано</label>
+                        <div class="progress">
+                            {% set used = extractions|length %}
+                            {% set total = current_user.get_max_urls_per_month() %}
+                            {% set percent = (used / total * 100)|round|int %}
+                            
+                            <div class="progress-bar {% if percent >= 90 %}bg-danger{% elif percent >= 70 %}bg-warning{% else %}bg-success{% endif %}" 
+                                 role="progressbar" 
+                                 style="width: {{ percent }}%"
+                                 aria-valuenow="{{ used }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="{{ total }}">
+                                {{ used }}/{{ total }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Відгуків на URL</label>
+                        <h4 class="mb-0">{{ current_user.get_max_reviews_per_url() }}</h4>
+                    </div>
+                    
+                    {% if not current_user.is_premium %}
+                    <a href="{{ url_for('main.premium') }}" class="btn btn-warning w-100">
+                        <i class="fas fa-crown"></i> Отримати Premium
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Завантаження...</span>
+                </div>
+                <h5>Витягуємо відгуки...</h5>
+                <p class="text-muted mb-0">Це може зайняти кілька хвилин</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('extractForm');
+    const urlInput = document.getElementById('url');
+    const submitBtn = document.getElementById('extractBtn');
+    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Показуємо модальне вікно завантаження
+        loadingModal.show();
+        
+        // Деактивуємо кнопку
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обробка...';
+        
+        try {
+            // Відправляємо запит
+            const response = await fetch('{{ url_for("review.extract") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: urlInput.value
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Помилка при витягуванні відгуків');
+            }
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            if (data.extraction_id) {
+                window.location.href = '{{ url_for("review.show_extraction", extraction_id="") }}' + data.extraction_id;
+            } else {
+                throw new Error('Не вдалося отримати ID витягу');
+            }
+            
+        } catch (error) {
+            loadingModal.hide();
+            alert(error.message || 'Помилка при витягуванні відгуків');
+        } finally {
+            // Відновлюємо кнопку
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-download"></i> Витягти відгуки';
+        }
+    });
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,45 @@
+{
+    "parser": {
+        "type": "html",
+        "config": {
+            "parser": "lxml"
+        }
+    },
+    "selectors": {
+        "product": {
+            "title": {
+                "selector": "h1[data-qaid='page_title']",
+                "type": "text"
+            }
+        },
+        "reviews": {
+            "container": "div[data-qaid='opinion_list']",
+            "item": "div[data-qaid='opinion_item']",
+            "fields": {
+                "author": {
+                    "selector": "span[data-qaid='author_name']",
+                    "type": "text"
+                },
+                "date": {
+                    "selector": "time[data-qaid='date_created']",
+                    "type": "text"
+                },
+                "rating": {
+                    "selector": "svg[data-qaid='count_stars']",
+                    "type": "number",
+                    "attribute": "data-qaid-raiting",
+                    "converter": "divide_by_20"
+                },
+                "text": {
+                    "selector": "span[data-qaid='title']",
+                    "type": "text"
+                },
+                "verified_purchase": {
+                    "selector": "span[data-qaid='prom_label_text']",
+                    "type": "boolean",
+                    "exists": true
+                }
+            }
+        }
+    }
+} 

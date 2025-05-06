@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Мої витяги - AI Review Extractor{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Мої витяги</h2>
+        <a href="{{ url_for('main.index') }}" class="btn btn-primary">Новий витяг</a>
+    </div>
+
+    {% if extractions %}
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th style="width: 40%">Назва товару</th>
+                    <th>Платформа</th>
+                    <th>Статус</th>
+                    <th>Дата створення</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for extraction in extractions %}
+                <tr>
+                    <td>
+                        {% if extraction.status == 'completed' %}
+                            <div class="mb-1">{{ extraction.title or 'Без назви' }}</div>
+                        {% endif %}
+                        <a href="{{ extraction.url }}" target="_blank" class="text-muted small text-decoration-none">
+                            <i class="fas fa-link"></i>
+                            {{ extraction.url|truncate(60, true, '...') }}
+                        </a>
+                    </td>
+                    <td>
+                        <span class="badge {% if extraction.platform == 'rozetka' %}bg-success{% else %}bg-secondary{% endif %}">
+                            {{ extraction.platform }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if extraction.status == 'completed' %}
+                            <span class="badge bg-success">Завершено</span>
+                        {% elif extraction.status == 'processing' %}
+                            <span class="badge bg-warning">В обробці</span>
+                        {% else %}
+                            <span class="badge bg-danger">Помилка</span>
+                            {% if extraction.error_message %}
+                            <div class="small text-danger mt-1">{{ extraction.error_message }}</div>
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                    <td>{{ extraction.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                Дії
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('review.view_extraction', id=extraction.id) }}">
+                                        <i class="fas fa-eye"></i> Переглянути
+                                    </a>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item text-danger delete-extraction" 
+                                            data-id="{{ extraction.id }}"
+                                            data-url="{{ url_for('review.delete_extraction', id=extraction.id) }}">
+                                        <i class="fas fa-trash"></i> Видалити
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <p class="text-muted">У вас поки немає витягів</p>
+        <a href="{{ url_for('main.index') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Створити перший витяг
+        </a>
+    </div>
+    {% endif %}
+
+    {% if not current_user.is_premium %}
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5 class="card-title">Покращіть свій досвід</h5>
+            <p class="card-text">
+                Ви використали {{ extractions|length }}/{{ current_user.get_remaining_urls() }} безкоштовних витягів цього місяця.
+                Перейдіть на преміум план, щоб отримати більше можливостей!
+            </p>
+            <a href="#" class="btn btn-success">Перейти на преміум</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Обробка видалення витягу
+    document.querySelectorAll('.delete-extraction').forEach(button => {
+        button.addEventListener('click', async function() {
+            if (confirm('Ви впевнені, що хочете видалити цей витяг?')) {
+                try {
+                    const response = await fetch(this.dataset.url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Перезавантажуємо сторінку після успішного видалення
+                        window.location.reload();
+                    } else {
+                        throw new Error(data.error || 'Помилка при видаленні витягу');
+                    }
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

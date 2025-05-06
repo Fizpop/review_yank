@@ -1,0 +1,66 @@
+name: "Prom.ua"
+domain: "prom.ua"
+enabled: true
+description: "Маркетплейс України"
+
+selectors:
+  title:
+    type: "css"
+    selector: "h1[data-qaid='page_title']"
+    
+  review:
+    container: 
+      type: "css"
+      selector: "div[data-qaid='opinion_item']"
+    
+    fields:
+      author:
+        type: "css"
+        selector: ".reviewer-name"
+        attribute: "text"
+      
+      text:
+        type: "css"
+        selector: ".review-text"
+        attribute: "text"
+        
+      rating:
+        type: "css"
+        selector: ".rating-value"
+        attribute: "text"
+        transform: "text_to_rating"  # Конвертує текстовий рейтинг в число
+        
+      date:
+        type: "css"
+        selector: ".review-date"
+        attribute: "text"
+        transform: "parse_date"  # Парсить українську дату
+        
+      id:
+        type: "attribute"
+        selector: "div[data-qaid='opinion_item']"
+        attribute: "data-review-id"
+
+transformers:
+  text_to_rating:
+    type: "regex"
+    pattern: "(\\d+)"
+    transform: "lambda x: int(x[0])"
+    
+  parse_date:
+    type: "date"
+    locale: "uk_UA"
+    format: "%d %B %Y"
+
+error_patterns:
+  - pattern: "Element not found: div[data-qaid='opinion_item']"
+    solution: "check_new_layout"
+  - pattern: "Invalid date format"
+    solution: "update_date_format"
+
+validation:
+  required_fields:
+    - "author"
+    - "text"
+  min_rating: 1
+  max_rating: 5 

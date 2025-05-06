@@ -1,0 +1,79 @@
+name: "Rozetka"
+domain: "rozetka.com.ua"
+enabled: true
+description: "Найбільший український інтернет-магазин"
+
+selectors:
+  title:
+    type: "css"
+    selector: "h1.product__title"
+    
+  review:
+    container: 
+      type: "css"
+      selector: "div.comment"
+    
+    fields:
+      author:
+        type: "css"
+        selector: "div[data-testid='replay-header-author']"
+        attribute: "text"
+      
+      text:
+        type: "css"
+        selector: "div.comment__body p"
+        attribute: "text"
+        
+      rating:
+        type: "css"
+        selector: "div[data-testid='stars-rating']"
+        attribute: "style"
+        transform: "width_to_rating"  # Конвертує width: calc(100%) в рейтинг 5
+        
+      date:
+        type: "css"
+        selector: "time[data-testid='replay-header-date']"
+        attribute: "text"
+        
+      id:
+        type: "attribute"
+        selector: "div.comment"
+        attribute: "data-comment-id"
+  
+  pros_cons:
+    pros:
+      headers:
+        - "Достоинства:"
+        - "Переваги:"
+        - "Advantages:"
+        - "Pros:"
+        - "Плюсы:"
+      selector: "div.comment__body div"
+      
+    cons:
+      headers:
+        - "Недостатки:"
+        - "Недоліки:"
+        - "Disadvantages:"
+        - "Cons:"
+        - "Минусы:"
+      selector: "div.comment__body div"
+
+transformers:
+  width_to_rating:
+    type: "regex"
+    pattern: "width:\\s*calc\\((\\d+)%\\)"
+    transform: "lambda x: int(float(x[0])/20)"  # Конвертує відсотки в рейтинг 1-5
+
+error_patterns:
+  - pattern: "Element not found: div[data-testid='replay-header-author']"
+    solution: "check_new_layout"
+  - pattern: "Invalid rating format"
+    solution: "update_rating_selector"
+
+validation:
+  required_fields:
+    - "author"
+    - "text"
+  min_rating: 1
+  max_rating: 5 

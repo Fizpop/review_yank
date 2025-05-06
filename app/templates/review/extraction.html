@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Результати витягу - AI Review Extractor{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Результати витягування відгуків</h2>
+    
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Інформація про витягування</h5>
+            <p><strong>URL:</strong> <a href="{{ extraction.url }}" target="_blank" class="text-break">{{ extraction.url }}</a></p>
+            <p><strong>Дата:</strong> {{ extraction.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+            <p><strong>Статус:</strong> 
+                {% if extraction.status == 'completed' %}
+                    <span class="badge bg-success">Завершено</span>
+                {% elif extraction.status == 'pending' %}
+                    <span class="badge bg-warning">В обробці</span>
+                {% else %}
+                    <span class="badge bg-danger">Помилка</span>
+                {% endif %}
+            </p>
+            {% if extraction.title %}
+            <p><strong>Назва товару:</strong> {{ extraction.title }}</p>
+            {% endif %}
+            
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('review.export_extraction', id=extraction.id, format='json') }}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-download"></i> Завантажити JSON
+                </a>
+                <a href="{{ url_for('review.export_extraction', id=extraction.id, format='csv') }}" class="btn btn-outline-success me-2">
+                    <i class="fas fa-file-csv"></i> Завантажити CSV
+                </a>
+                {% if reviews and reviews|length > 0 %}
+                <button type="button" class="btn btn-outline-info" id="summarizeBtn">
+                    <i class="fas fa-chart-pie"></i> Отримати підсумок
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if reviews %}
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Автор</th>
+                    <th>Текст</th>
+                    <th style="width: 100px;">Рейтинг</th>
+                    <th style="width: 150px;">Дата</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for review in reviews %}
+                <tr>
+                    <td>{{ review.author }}</td>
+                    <td class="text-break">{{ review.text }}</td>
+                    <td>
+                        <div class="text-warning">
+                            {% for i in range(5) %}
+                                {% if review.rating is not none and i < review.rating %}
+                                    <i class="fas fa-star"></i>
+                                {% else %}
+                                    <i class="far fa-star"></i>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td>{{ review.date }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        Відгуки не знайдено
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal для підсумку -->
+<div class="modal fade" id="summaryModal" tabindex="-1" aria-labelledby="summaryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="summaryModalLabel">Підсумок відгуків</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="summaryContent">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Завантаження...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Перевіряємо чи завантажений Bootstrap
+    if (typeof bootstrap === 'undefined') {
+        console.error('Bootstrap не завантажено!');
+        return;
+    }
+    
+    const summarizeBtn = document.getElementById('summarizeBtn');
+    if (summarizeBtn) {
+        summarizeBtn.addEventListener('click', async function() {
+            console.log('Кнопка натиснута'); // Додаємо для дебагу
+            const modalElement = document.getElementById('summaryModal');
+            if (!modalElement) {
+                console.error('Модальне вікно не знайдено!');
+                return;
+            }
+            
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            
+            try {
+                console.log('Відправляємо запит на /extraction/{{ extraction.id }}/summary');
+                const response = await fetch(`/extraction/{{ extraction.id }}/summary`);
+                const data = await response.json();
+                console.log('Отримана відповідь:', data);
+                
+                if (response.ok) {
+                    document.getElementById('summaryContent').innerHTML = `
+                        <div class="summary-content">
+                            <div class="mb-3">
+                                <h6 class="d-flex align-items-center">
+                                    <span>Загальний рейтинг: </span>
+                                    <span class="ms-2 text-warning">
+                                        ${Array(5).fill(0).map((_, i) => 
+                                            i < Math.round(data.average_rating) 
+                                                ? '<i class="fas fa-star"></i>' 
+                                                : '<i class="far fa-star"></i>'
+                                        ).join('')}
+                                    </span>
+                                    <span class="ms-2">(${data.average_rating.toFixed(1)} з 5)</span>
+                                </h6>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Основні висновки:</h6>
+                                <p>${data.summary}</p>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Переваги:</h6>
+                                <ul class="list-group list-group-flush">
+                                    ${data.pros.map(pro => `
+                                        <li class="list-group-item">
+                                            <i class="fas fa-check-circle text-success me-2"></i>${pro}
+                                        </li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Недоліки:</h6>
+                                <ul class="list-group list-group-flush">
+                                    ${data.cons.map(con => `
+                                        <li class="list-group-item">
+                                            <i class="fas fa-exclamation-circle text-danger me-2"></i>${con}
+                                        </li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('summaryContent').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Помилка при отриманні підсумку: ${data.error || 'Невідома помилка'}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('summaryContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Помилка при отриманні підсумку: ${error.message}
+                    </div>
+                `;
+            }
+        });
+    } else {
+        console.error('Кнопка summarizeBtn не знайдена!');
+    }
+});
+</script>
+{% endblock %} 

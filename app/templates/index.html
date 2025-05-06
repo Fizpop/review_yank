@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}AI Review Extractor - Головна{% endblock %}
+
+{% block content %}
+<div class="container text-center mt-5">
+    <h1 class="display-4 mb-4">AI Review Extractor</h1>
+    <p class="lead mb-5">Автоматичне витягування відгуків з популярних платформ за допомогою штучного інтелекту</p>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Витягнути відгуки</h5>
+                    <form id="extractForm">
+                        <div class="mb-3">
+                            <label for="url" class="form-label">URL сторінки з відгуками</label>
+                            <input type="url" class="form-control" id="url" name="url" required 
+                                   placeholder="Наприклад: https://rozetka.com.ua/product/comments/ або https://prom.ua/product">
+                            <div class="form-text">
+                                Підтримувані платформи:
+                                <span class="badge bg-success">Rozetka</span>
+                                <span class="badge bg-success">Prom.ua</span>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="extractBtn">
+                            <i class="fas fa-download"></i> Витягти відгуки
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Підтримувані платформи</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success"></i> Prom.ua</li>
+                        <li><i class="fas fa-check text-success"></i> Rozetka</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Особливості</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success"></i> Автоматичне витягування</li>
+                        <li><i class="fas fa-check text-success"></i> Експорт в CSV/JSON</li>
+                        <li><i class="fas fa-check text-success"></i> Аналіз відгуків</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Тарифи</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success"></i> Безкоштовно: 5 URL/місяць</li>
+                        <li><i class="fas fa-crown text-warning"></i> Преміум: 100 URL/місяць</li>
+                        <li><i class="fas fa-tag text-info"></i> Від $7/місяць</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Завантаження...</span>
+                </div>
+                <h5>Витягуємо відгуки...</h5>
+                <p class="text-muted mb-0">Це може зайняти кілька хвилин</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('extractForm');
+    const urlInput = document.getElementById('url');
+    const submitBtn = document.getElementById('extractBtn');
+    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Показуємо модальне вікно завантаження
+        loadingModal.show();
+        
+        // Деактивуємо кнопку
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обробка...';
+        
+        try {
+            // Відправляємо запит
+            const response = await fetch('{{ url_for("review.extract") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: urlInput.value
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Помилка при витягуванні відгуків');
+            }
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            if (data.extraction_id) {
+                const redirectUrl = new URL('{{ url_for("review.view_extraction", id=0) }}'.replace('0', data.extraction_id), window.location.origin);
+                window.location.href = redirectUrl.toString();
+            } else {
+                throw new Error('Не вдалося отримати ID витягу');
+            }
+            
+        } catch (error) {
+            loadingModal.hide();
+            alert(error.message || 'Помилка при витягуванні відгуків');
+        } finally {
+            // Відновлюємо кнопку
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-download"></i> Витягти відгуки';
+        }
+    });
+});
+</script>
+{% endblock %} 
