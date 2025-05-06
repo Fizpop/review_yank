@@ -168,11 +168,18 @@ class ReviewExtractor:
             
             current_app.logger.info(f"Використовуємо конфігурацію: {json.dumps(config, ensure_ascii=False)}")
             
-            soup = BeautifulSoup(html_content, config.get('parser', 'lxml'))
+            parser = config.get('parser', 'lxml')
+            if isinstance(parser, dict):
+                # config: {"type": "html", "config": {"parser": "lxml"}}
+                parser = parser.get('config', {}).get('parser', 'lxml')
+            soup = BeautifulSoup(html_content, parser)
             
             # Знаходимо назву товару
             product_title = None
-            title_selector = config['selectors']['product_title']
+            try:
+                title_selector = config['selectors']['product']['title']['selector']
+            except Exception:
+                title_selector = config['selectors'].get('product_title')
             title_elem = soup.select_one(title_selector)
             if title_elem:
                 product_title = title_elem.text.strip()
@@ -182,9 +189,14 @@ class ReviewExtractor:
             
             # Знаходимо всі відгуки
             reviews = []
-            container_selector = config['selectors']['reviews_container']
-            item_selector = config['selectors']['review_item']
-            
+            try:
+                container_selector = config['selectors']['reviews']['container']
+                item_selector = config['selectors']['reviews']['item']
+                fields_config = config['selectors']['reviews']['fields']
+            except Exception:
+                container_selector = config['selectors'].get('reviews_container')
+                item_selector = config['selectors'].get('review_item')
+                fields_config = config['selectors'].get('review_fields')
             # Логуємо HTML контейнера відгуків
             reviews_container = soup.select_one(container_selector)
             if reviews_container:
@@ -216,12 +228,68 @@ class ReviewExtractor:
                     }
                     
                     # Витягуємо всі поля згідно конфігурації
-                    fields_config = config['selectors']['review_fields']
-                    for field_name, selector in fields_config.items():
-                        elem = item.select_one(selector)
+                    for field_name, selector_config in fields_config.items():
+                        if isinstance(selector_config, dict):
+                            selector = selector_config.get('selector')
+                        else:
+                            selector = selector_config
+                        # --- Виправлення селекторів для рейтингу Rozetka та Prom ---
+                        if field_name == 'rating':
+                            if domain == 'rozetka.com.ua':
+                                elem = item.select_one("[data-testid='stars-rating']")
+                                if elem and elem.has_attr('style'):
+                                    style = elem['style']
+                                    m = re.search(r'width:\s*calc\((\d+)%\s*-\s*2px\)', style)
+                                    if m:
+                                        width = int(m.group(1))
+                                        review[field_name] = width // 20
+                                        current_app.logger.debug(f"Знайдено рейтинг через style: {review[field_name]}")
+                                    else:
+                                        review[field_name] = None
+                                else:
+                                    review[field_name] = None
+                            elif domain == 'prom.ua':
+                                elem = item.select_one("[data-qaid='count_stars']")
+                                if elem and 'data-qaid-raiting' in elem.attrs:
+                                    review[field_name] = int(elem['data-qaid-raiting']) // 20
+                                else:
+                                    review[field_name] = None
+                            else:
+                                elem = item.select_one(selector)
+                                if elem:
+                                    if isinstance(selector_config, dict) and selector_config.get('type') == 'style' and selector_config.get('attribute') == 'style' and 'pattern' in selector_config:
+                                        style = elem.get('style', '')
+                                        m = re.search(selector_config['pattern'], style)
+                                        if m:
+                                            width = int(m.group(1))
+                                            review[field_name] = width // 20
+                                        else:
+                                            review[field_name] = None
+                                    elif 'data-qaid-raiting' in elem.attrs:
+                                        review[field_name] = int(elem['data-qaid-raiting']) // 20
+                                    else:
+                                        review[field_name] = None
+                                else:
+                                    review[field_name] = None
+                        elif field_name == 'advantages':
+                            elem = item.select_one("[data-qaid='pros']")
+                        elif field_name == 'disadvantages':
+                            elem = item.select_one("[data-qaid='cons']")
+                        else:
+                            elem = item.select_one(selector)
+                        # --- кінець виправлення ---
                         if elem:
                             if field_name == 'rating':
-                                if 'data-qaid-raiting' in elem.attrs:
+                                # --- Парсимо рейтинг з width у style ---
+                                if isinstance(selector_config, dict) and selector_config.get('type') == 'style' and selector_config.get('attribute') == 'style' and 'pattern' in selector_config:
+                                    style = elem.get('style', '')
+                                    m = re.search(selector_config['pattern'], style)
+                                    if m:
+                                        width = int(m.group(1))
+                                        review[field_name] = width // 20
+                                    else:
+                                        review[field_name] = None
+                                elif 'data-qaid-raiting' in elem.attrs:
                                     review[field_name] = int(elem['data-qaid-raiting']) // 20
                                 else:
                                     review[field_name] = None
@@ -520,53 +588,187 @@ def parse_rozetka_date(date_str):
         return None
 
 def extract_page_content(url):
-    """Отримує HTML-код сторінки"""
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Cache-Control': 'max-age=0',
-            'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-            'Sec-Ch-Ua-Mobile': '?0',
-            'Sec-Ch-Ua-Platform': '"macOS"',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1',
-            'Referer': 'https://allo.ua/'
-        }
+    """Отримує HTML-код сторінки через Playwright (як у тесті)"""
+    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+    import time
+    import logging
+    
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context()
+                page = context.new_page()
+                page.goto(url)
+                
+                # Різні селектори для різних платформ
+                if 'prom.ua' in url:
+                    page.wait_for_selector('[data-qaid="opinion_item"]', timeout=30000)
+                else:  # для rozetka
+                    page.wait_for_selector('.product-comments__list-item', timeout=30000)
+                
+                previous_height = 0
+                max_scrolls = 10
+                scroll_count = 0
+                while scroll_count < max_scrolls:
+                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                    time.sleep(2)
+                    current_height = page.evaluate('document.body.scrollHeight')
+                    if current_height == previous_height:
+                        break
+                    previous_height = current_height
+                    scroll_count += 1
+                html = page.content()
+                browser.close()
+                return html
+        except PlaywrightTimeoutError:
+            logging.warning(f"PlaywrightTimeoutError для URL: {url}, спроба {attempt+1} з {max_attempts}")
+            if attempt < max_attempts - 1:
+                time.sleep(2)
+                continue
+            else:
+                raise
+        except Exception as e:
+            logging.error(f"Playwright error для URL: {url}: {e}")
+            if attempt < max_attempts - 1:
+                time.sleep(2)
+                continue
+            else:
+                raise
+    return None
 
-        # Додаємо cookies для більшої схожості на реального користувача
-        cookies = {
-            'locale': 'uk',
-            'currency': 'UAH',
-            'city': 'Kyiv'
+def extract_rozetka_reviews_playwright(url):
+    """Парсить відгуки Rozetka через Playwright, як у тесті, повертає product_title і reviews"""
+    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+    import time
+    from bs4 import BeautifulSoup
+    import logging
+    reviews = []
+    product_title = None
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context()
+                page = context.new_page()
+                page.goto(url)
+                page.wait_for_selector('.product-comments__list-item', timeout=30000)
+                previous_height = 0
+                max_scrolls = 10
+                scroll_count = 0
+                while scroll_count < max_scrolls:
+                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                    time.sleep(2)
+                    current_height = page.evaluate('document.body.scrollHeight')
+                    if current_height == previous_height:
+                        break
+                    previous_height = current_height
+                    scroll_count += 1
+                # --- Пошук тайтлу через кілька селекторів ---
+                title_selectors = [
+                    'h1.product__title',
+                    '.product__heading',
+                    '.product-title',
+                    'h1',
+                    'title'
+                ]
+                for sel in title_selectors:
+                    title_elem = page.query_selector(sel)
+                    if title_elem:
+                        product_title = title_elem.inner_text().strip()
+                        if product_title:
+                            break
+                html = page.content()
+                soup = BeautifulSoup(html, 'html.parser')
+                review_items = soup.select('.product-comments__list-item')
+                for review in review_items:
+                    data = {
+                        'rating': None,
+                        'author': None,
+                        'date': None,
+                        'text': None,
+                        'advantages': None,
+                        'disadvantages': None,
+                        'likes': 0,
+                        'dislikes': 0,
+                        'bought': False,
+                        'comment_photos': [],
+                    }
+                    rating_element = review.select_one('[data-testid="stars-rating"]')
+                    if rating_element and 'style' in rating_element.attrs:
+                        style = rating_element['style']
+                        pattern = r'width:\s*calc\((\d+)%\s*-\s*2px\)'
+                        m = re.search(pattern, style)
+                        if m:
+                            width = int(m.group(1))
+                            data['rating'] = width // 20
+                    author_element = review.select_one('[data-testid="replay-header-author"]')
+                    if author_element:
+                        data['author'] = author_element.text.strip()
+                    date_element = review.select_one('[data-testid="replay-header-date"]')
+                    if date_element:
+                        data['date'] = date_element.text.strip()
+                    text_element = review.select_one('.comment__body-wrapper p')
+                    if text_element:
+                        data['text'] = text_element.text.strip()
+                    advantages_element = review.select_one('.comment__essentials dd')
+                    if advantages_element:
+                        data['advantages'] = advantages_element.text.strip()
+                    disadvantages_element = review.select_one('.comment__essentials dd:nth-of-type(2)')
+                    if disadvantages_element:
+                        data['disadvantages'] = disadvantages_element.text.strip()
+                    likes_element = review.select_one('.vote-buttons-comments__counter')
+                    if likes_element:
+                        try:
+                            data['likes'] = int(likes_element.text.strip())
+                        except ValueError:
+                            pass
+                    dislikes_element = review.select_one('.vote-buttons-comments__vote--dislike .vote-buttons-comments__counter')
+                    if dislikes_element:
+                        try:
+                            data['dislikes'] = int(dislikes_element.text.strip())
+                        except ValueError:
+                            pass
+                    bought_element = review.select_one('[aria-label="uzhe_kupil"]')
+                    data['bought'] = bool(bought_element)
+                    photo_elements = review.select('.comment__photo, .comment__image')
+                    for photo in photo_elements:
+                        if 'src' in photo.attrs:
+                            data['comment_photos'].append(photo['src'])
+                    reviews.append(data)
+                browser.close()
+            break  # якщо все ок — виходимо з циклу
+        except PlaywrightTimeoutError:
+            logging.warning(f"PlaywrightTimeoutError для URL: {url}, спроба {attempt+1} з {max_attempts}")
+            if attempt < max_attempts - 1:
+                time.sleep(2)
+                continue
+            else:
+                raise
+        except Exception as e:
+            logging.error(f"Playwright error для URL: {url}: {e}")
+            if attempt < max_attempts - 1:
+                time.sleep(2)
+                continue
+            else:
+                raise
+    return product_title, reviews
+
+# --- Додаю використання цієї функції у ReviewExtractor ---
+
+old_extract_reviews = ReviewExtractor.extract_reviews
+
+def extract_reviews(self, html_content, url):
+    if 'rozetka.com.ua' in url:
+        product_title, reviews = extract_rozetka_reviews_playwright(url)
+        return {
+            'product_title': product_title,
+            'reviews': reviews,
+            'platform': 'rozetka.com.ua'
         }
-        
-        # Робимо запит з таймаутом
-        response = requests.get(
-            url,
-            headers=headers,
-            cookies=cookies,
-            timeout=10,
-            allow_redirects=True,
-            verify=False
-        )
-        
-        response.raise_for_status()
-        
-        # Перевіряємо кодування
-        if 'charset' in response.headers.get('content-type', '').lower():
-            response.encoding = response.apparent_encoding
-        else:
-            response.encoding = 'utf-8'
-            
-        return response.text
-        
-    except Exception as e:
-        current_app.logger.error(f"Error fetching page content: {str(e)}")
-        return None 
+    else:
+        return old_extract_reviews(self, html_content, url)
+
+ReviewExtractor.extract_reviews = extract_reviews 

@@ -41,9 +41,10 @@ def add_rozetka():
                                 "type": "text"
                             },
                             "rating": {
-                                "selector": "div.rating-stars",
-                                "type": "number",
-                                "attribute": "data-rating"
+                                "selector": "div[data-testid='stars-rating']",
+                                "type": "style",
+                                "attribute": "style",
+                                "pattern": r'width:\s*calc\((\d+)%'
                             },
                             "text": {
                                 "selector": "div.comment__text",

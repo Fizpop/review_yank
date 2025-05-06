@@ -27,6 +27,13 @@ class Platform(db.Model):
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
+    def set_config(self, config):
+        """Set platform configuration"""
+        if isinstance(config, dict):
+            self.config = json.dumps(config)
+        else:
+            self.config = config
+
     @staticmethod
     def get_default_config():
         return {
@@ -34,16 +41,17 @@ class Platform(db.Model):
                 'name': 'Rozetka',
                 'domain': 'rozetka.com.ua',
                 'selectors': {
-                    'product_title': 'h1.title__font',
-                    'reviews_container': 'div.product-comments',
-                    'review_item': 'div.comment__inner',
+                    'product_title': 'h1.product__title',
+                    'reviews_container': 'ul.product-comments__list',
+                    'review_item': '.product-comments__list-item',
                     'review_fields': {
-                        'author': 'span.comment__author',
-                        'text': 'div.comment__text',
-                        'rating': 'div.rating-stars',
-                        'date': 'time.comment__date',
-                        'advantages': 'div.comment__advantages',
-                        'disadvantages': 'div.comment__disadvantages'
+                        'author': "[data-testid='replay-header-author']",
+                        'text': ".comment__body-wrapper p",
+                        'rating': ".stars__rating",
+                        'date': "[data-testid='replay-header-date']",
+                        'advantages': ".comment__essentials dd",
+                        'disadvantages': ".comment__essentials dd:nth-of-type(2)",
+                        'product_info': ".comment__vars"
                     },
                     'pagination': {
                         'next_page': 'a.pagination__direction_type_forward',

@@ -14,32 +14,37 @@
       }
     },
     "reviews": {
-      "container": "div.product-comments",
-      "item": "div.comment__inner",
+      "container": "ul.product-comments__list",
+      "item": ".product-comments__list-item",
       "fields": {
         "author": {
-          "selector": "div[data-testid='replay-header-author']",
+          "selector": "[data-testid='replay-header-author']",
           "type": "text"
         },
         "date": {
-          "selector": "time[data-testid='replay-header-date']",
+          "selector": "[data-testid='replay-header-date']",
           "type": "text"
         },
         "rating": {
-          "selector": "div[data-testid='stars-rating']",
-          "type": "number",
-          "attribute": "data-rating"
+          "selector": ".stars__rating",
+          "type": "style",
+          "attribute": "style",
+          "pattern": "width:\\s*(\\d+)"
         },
         "text": {
-          "selector": "div.comment__body",
+          "selector": ".comment__body-wrapper p",
           "type": "text"
         },
         "advantages": {
-          "selector": "div.comment__advantages",
+          "selector": ".comment__essentials dd", 
           "type": "text"
         },
         "disadvantages": {
-          "selector": "div.comment__disadvantages",
+          "selector": ".comment__essentials dd:nth-of-type(2)", 
+          "type": "text"
+        },
+        "product_info": {
+          "selector": ".comment__vars",
           "type": "text"
         }
       }

@@ -219,7 +219,11 @@ def get_summary(extraction_id):
                 return jsonify({'error': 'Неправильний формат відповіді від ШІ'}), 500
         
         # Додаємо середній рейтинг
-        average_rating = sum(review.rating for review in reviews) / len(reviews)
+        ratings = [review.rating for review in reviews if review.rating is not None]
+        if ratings:
+            average_rating = sum(ratings) / len(ratings)
+        else:
+            average_rating = 0
         result['average_rating'] = average_rating
         
         return jsonify(result)

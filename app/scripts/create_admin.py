@@ -1,33 +1,28 @@
+import os
+import sys
+
+# Додаємо корінь проєкту до PYTHONPATH
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from app import create_app, db
 from app.models.user import User
 
-def create_admin():
-    """Create a new admin user"""
+def create_admin_user():
     app = create_app()
-    
     with app.app_context():
-        try:
-            # Check if admin already exists
-            admin = User.query.filter_by(email='admin@example.com').first()
-            if admin:
-                print("Адміністратор вже існує")
-                return
-                
-            # Create new admin user
+        # Перевіряємо чи існує адмін
+        admin = User.query.filter_by(email='dasssiks@gmail.com').first()
+        if not admin:
             admin = User(
-                email='admin@example.com',
-                username='admin',
+                email='dasssiks@gmail.com',
+                password='admin123',  # В реальному проєкті використовуйте безпечний пароль
                 is_admin=True
             )
-            admin.set_password('admin')
-            
             db.session.add(admin)
             db.session.commit()
-            print("Адміністратор успішно створений")
-            
-        except Exception as e:
-            print(f"Помилка при створенні адміністратора: {str(e)}")
-            db.session.rollback()
+            print("Admin user created successfully!")
+        else:
+            print("Admin user already exists!")
 
-if __name__ == "__main__":
-    create_admin() 
+if __name__ == '__main__':
+    create_admin_user() 

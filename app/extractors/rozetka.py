@@ -3,11 +3,85 @@ from bs4 import BeautifulSoup
 import re
 import logging
 from flask import current_app
+from playwright.sync_api import sync_playwright
+import time
+import os
 
 from app.extractors.base import BaseExtractor
 from app.config.rozetka import ROZETKA_CONFIG
 
 logger = logging.getLogger(__name__)
+
+def extract_rating(rating_element):
+    if not rating_element:
+        return None
+    if 'style' in rating_element.attrs:
+        style = rating_element['style']
+        pattern = r'width:\s*calc\((\d+)%\s*-\s*2px\)'
+        m = re.search(pattern, style)
+        if m:
+            width = int(m.group(1))
+            return width // 20
+    return None
+
+def extract_review_data(review):
+    data = {
+        'rating': None,
+        'author': None,
+        'date': None,
+        'text': None,
+        'advantages': None,
+        'disadvantages': None,
+        'likes': 0,
+        'dislikes': 0,
+        'bought': False,
+        'comment_photos': [],
+    }
+    # Рейтинг
+    rating_element = review.select_one('[data-testid="stars-rating"]')
+    data['rating'] = extract_rating(rating_element)
+    # Автор
+    author_element = review.select_one('[data-testid="replay-header-author"]')
+    if author_element:
+        data['author'] = author_element.text.strip()
+    # Дата
+    date_element = review.select_one('[data-testid="replay-header-date"]')
+    if date_element:
+        data['date'] = date_element.text.strip()
+    # Основний текст
+    text_element = review.select_one('.comment__body-wrapper p')
+    if text_element:
+        data['text'] = text_element.text.strip()
+    # Переваги
+    advantages_element = review.select_one('.comment__essentials dd')
+    if advantages_element:
+        data['advantages'] = advantages_element.text.strip()
+    # Недоліки
+    disadvantages_element = review.select_one('.comment__essentials dd:nth-of-type(2)')
+    if disadvantages_element:
+        data['disadvantages'] = disadvantages_element.text.strip()
+    # Лайки/дизлайки
+    likes_element = review.select_one('.vote-buttons-comments__counter')
+    if likes_element:
+        try:
+            data['likes'] = int(likes_element.text.strip())
+        except ValueError:
+            pass
+    dislikes_element = review.select_one('.vote-buttons-comments__vote--dislike .vote-buttons-comments__counter')
+    if dislikes_element:
+        try:
+            data['dislikes'] = int(dislikes_element.text.strip())
+        except ValueError:
+            pass
+    # Перевірка на покупку
+    bought_element = review.select_one('[aria-label="uzhe_kupil"]')
+    data['bought'] = bool(bought_element)
+    # Фотографії
+    photo_elements = review.select('.comment__photo, .comment__image')
+    for photo in photo_elements:
+        if 'src' in photo.attrs:
+            data['comment_photos'].append(photo['src'])
+    return data
 
 class RozetkaExtractor(BaseExtractor):
     def __init__(self):
@@ -21,118 +95,109 @@ class RozetkaExtractor(BaseExtractor):
             return match.group(1)
         return None
         
-    def extract_reviews(self, html: str) -> List[Dict[str, Any]]:
-        """Extract reviews from product page HTML."""
-        soup = BeautifulSoup(html, 'lxml')
+    def extract_reviews(self, url: str) -> List[Dict[str, Any]]:
+        """Extract reviews from product page using Playwright."""
         reviews = []
         
         logger.info("Починаємо витяг відгуків")
         
-        # Шукаємо контейнер з відгуками
-        container = soup.select_one(self.config['selectors']['reviews']['container'])
-        if not container:
-            logger.error("Контейнер з відгуками не знайдено")
-            return reviews
+        with sync_playwright() as p:
+            # Запускаємо браузер
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context()
+            page = context.new_page()
             
-        # Шукаємо всі відгуки
-        review_items = container.select(self.config['selectors']['reviews']['item'])
-        logger.debug(f"Знайдено відгуків: {len(review_items)}")
-        
-        if not review_items:
-            logger.error("Відгуки не знайдено")
-            return reviews
-            
-        for item in review_items:
             try:
-                review = {}
+                # Відкриваємо сторінку
+                page.goto(url)
                 
-                # Виводимо HTML відгуку для діагностики
-                logger.debug(f"HTML відгуку: {str(item)}")
+                # Чекаємо поки завантажаться відгуки
+                page.wait_for_selector('.product-comments__list-item')
                 
-                # Знаходимо автора
-                author_elem = item.select_one(self.config['selectors']['reviews']['fields']['author']['selector'])
-                if author_elem:
-                    review['author'] = author_elem.get_text(strip=True)
-                    logger.debug(f"Знайдено автора: {review['author']}")
-                else:
-                    logger.debug(f"Автора не знайдено")
+                # Скролимо сторінку, щоб завантажити всі відгуки
+                previous_height = 0
+                max_scrolls = 10  # Максимальна кількість скролів
+                scroll_count = 0
                 
-                # Знаходимо дату
-                date_elem = item.select_one(self.config['selectors']['reviews']['fields']['date']['selector'])
-                if date_elem:
-                    review['date'] = date_elem.get_text(strip=True)
-                    logger.debug(f"Знайдено дату: {review['date']}")
-                else:
-                    logger.debug(f"Дату не знайдено")
-                
-                # Знаходимо рейтинг
-                rating_elem = item.select_one(self.config['selectors']['reviews']['fields']['rating']['selector'])
-                if rating_elem and rating_elem.has_attr(self.config['selectors']['reviews']['fields']['rating']['attribute']):
-                    try:
-                        rating_value = float(rating_elem[self.config['selectors']['reviews']['fields']['rating']['attribute']])
-                        review['rating'] = rating_value
-                        logger.debug(f"Знайдено рейтинг: {review['rating']}")
-                    except (ValueError, TypeError) as e:
-                        logger.error(f"Помилка конвертації рейтингу: {e}")
-                        review['rating'] = 0
-                else:
-                    logger.debug(f"Рейтинг не знайдено")
-                
-                # Знаходимо текст
-                text_elem = item.select_one(self.config['selectors']['reviews']['fields']['text']['selector'])
-                if text_elem:
-                    review['text'] = text_elem.get_text(strip=True)
-                    logger.debug(f"Знайдено текст: {review['text']}")
-                else:
-                    logger.debug(f"Текст не знайдено")
-                
-                # Знаходимо переваги
-                advantages_elem = item.select_one(self.config['selectors']['reviews']['fields']['advantages']['selector'])
-                if advantages_elem:
-                    review['advantages'] = advantages_elem.get_text(strip=True)
-                    logger.debug(f"Знайдено переваги: {review['advantages']}")
-                else:
-                    logger.debug(f"Переваги не знайдено")
-                
-                # Знаходимо недоліки
-                disadvantages_elem = item.select_one(self.config['selectors']['reviews']['fields']['disadvantages']['selector'])
-                if disadvantages_elem:
-                    review['disadvantages'] = disadvantages_elem.get_text(strip=True)
-                    logger.debug(f"Знайдено недоліки: {review['disadvantages']}")
-                else:
-                    logger.debug(f"Недоліки не знайдено")
-                
-                # Додаємо ID відгуку
-                review['platform_review_id'] = item.get('data-review-id', '')
-                
-                # Логуємо знайдені значення
-                logger.debug(f"Зібрані дані відгуку: {review}")
-                
-                # Додаємо відгук тільки якщо є хоча б автор або текст
-                if review.get('author') or review.get('text'):
-                    reviews.append(review)
-                    logger.debug(f"Додано відгук: {review}")
-                else:
-                    logger.warning("Відгук пропущено - немає автора або тексту")
+                while scroll_count < max_scrolls:
+                    # Скролимо до кінця сторінки
+                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                    time.sleep(2)  # Чекаємо поки підвантажаться нові відгуки
                     
+                    # Перевіряємо нову висоту
+                    current_height = page.evaluate('document.body.scrollHeight')
+                    if current_height == previous_height:
+                        break  # Якщо висота не змінилась, значить нові відгуки не завантажились
+                        
+                    previous_height = current_height
+                    scroll_count += 1
+                
+                # Отримуємо HTML
+                html = page.content()
+
+                # Зберігаємо HTML для діагностики
+                debug_path = os.path.abspath('debug_rozetka_product.html')
+                with open(debug_path, 'w', encoding='utf-8') as f:
+                    f.write(html)
+                print(f"HTML сторінки збережено у: {debug_path}")
+                print(f"Розмір debug_rozetka_product.html: {os.path.getsize(debug_path)} байт")
+                print("Починаю парсинг відгуків з debug_rozetka_product.html...")
+                
+                # Аналізуємо відгуки
+                soup = BeautifulSoup(html, 'html.parser')
+                review_items = soup.select('.product-comments__list-item')
+                logger.debug(f"Знайдено відгуків: {len(review_items)}")
+                
+                for item in review_items:
+                    try:
+                        review_data = extract_review_data(item)
+                        reviews.append(review_data)
+                        logger.debug(f"Додано відгук: {review_data}")
+                    except Exception as e:
+                        logger.error(f"Помилка при обробці відгуку: {str(e)}")
+                        continue
+                
             except Exception as e:
-                logger.error(f"Помилка при обробці відгуку: {str(e)}")
-                continue
+                logger.error(f"Помилка при роботі з Playwright: {str(e)}")
+            finally:
+                browser.close()
                 
         logger.info(f"Загалом оброблено відгуків: {len(reviews)}")
         return reviews
         
-    def extract_product_info(self, html: str) -> Dict[str, Any]:
-        """Extract product information from HTML."""
-        soup = BeautifulSoup(html, 'lxml')
+    def extract_product_info(self, url: str) -> Dict[str, Any]:
+        """Extract product information using Playwright."""
         product_info = {}
         
-        # Шукаємо заголовок товару
-        title_elem = soup.select_one(self.config['selectors']['product']['title']['selector'])
-        if title_elem:
-            product_info['title'] = title_elem.get_text(strip=True)
-            logger.info(f"Знайдено заголовок товару: {product_info['title']}")
-        else:
-            logger.error("Заголовок товару не знайдено")
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context()
+            page = context.new_page()
+            
+            try:
+                # Відкриваємо сторінку
+                page.goto(url)
+                
+                # Чекаємо поки завантажиться заголовок
+                page.wait_for_selector(self.config['selectors']['product_title'])
+                
+                # Отримуємо HTML
+                html = page.content()
+                
+                # Аналізуємо дані
+                soup = BeautifulSoup(html, 'lxml')
+                
+                # Шукаємо заголовок товару
+                title_elem = soup.select_one(self.config['selectors']['product_title'])
+                if title_elem:
+                    product_info['title'] = title_elem.get_text(strip=True)
+                    logger.info(f"Знайдено заголовок товару: {product_info['title']}")
+                else:
+                    logger.error("Заголовок товару не знайдено")
+                    
+            except Exception as e:
+                logger.error(f"Помилка при роботі з Playwright: {str(e)}")
+            finally:
+                browser.close()
             
         return product_info 
