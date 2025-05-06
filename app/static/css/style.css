@@ -63,4 +63,83 @@ main {
     margin-top: auto;
     background-color: #f8f9fa;
     padding: 1rem 0;
+}
+
+/* --- Адаптивність для таблиць --- */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  min-width: 600px;
+}
+
+td, th {
+  word-break: break-word;
+  white-space: normal;
+  padding: 8px;
+}
+
+/* --- Кінець адаптивності --- */
+
+@media (max-width: 600px) {
+  .table-responsive table,
+  .table-responsive thead,
+  .table-responsive tbody,
+  .table-responsive th,
+  .table-responsive td,
+  .table-responsive tr {
+    display: block;
+    width: 100%;
+  }
+
+  .table-responsive thead tr {
+    display: none;
+  }
+
+  .table-responsive tr {
+    margin-bottom: 1rem;
+    border-bottom: 2px solid #eee;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+    background: #fff;
+    border-radius: 8px;
+    padding: 8px 0;
+  }
+
+  .table-responsive td {
+    position: relative;
+    padding-left: 50%;
+    min-height: 40px;
+    border: none;
+    box-shadow: none;
+  }
+
+  .table-responsive td:before {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 45%;
+    white-space: nowrap;
+    font-weight: bold;
+    color: #888;
+    content: attr(data-label);
+  }
+}
+
+@media (min-width: 601px) {
+  .table th:first-child,
+  .table td:first-child {
+    min-width: 120px;
+    max-width: 180px;
+    width: 140px;
+    vertical-align: top;
+    word-break: break-word;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
 } 

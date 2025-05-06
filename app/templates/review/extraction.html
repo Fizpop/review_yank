@@ -54,9 +54,9 @@
             <tbody>
                 {% for review in reviews %}
                 <tr>
-                    <td>{{ review.author }}</td>
-                    <td class="text-break">{{ review.text }}</td>
-                    <td>
+                    <td data-label="Автор">{{ review.author }}</td>
+                    <td data-label="Текст" class="text-break">{{ review.text }}</td>
+                    <td data-label="Рейтинг">
                         <div class="text-warning">
                             {% for i in range(5) %}
                                 {% if review.rating is not none and i < review.rating %}
@@ -67,7 +67,7 @@
                             {% endfor %}
                         </div>
                     </td>
-                    <td>{{ review.date }}</td>
+                    <td data-label="Дата">{{ review.date }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
